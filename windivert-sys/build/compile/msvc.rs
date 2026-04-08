@@ -1,7 +1,7 @@
-use cc::Build;
-use std::{env, fs};
-
 use crate::DLL_OUTPUT_PATH_ARG;
+use cc::Build;
+use std::path::PathBuf;
+use std::{env, fs, path::Path};
 
 pub fn lib() {
     let mut build = Build::new();
@@ -9,8 +9,8 @@ pub fn lib() {
 
     build
         .out_dir(&out_dir)
-        .include(r#"vendor\include"#)
-        .file(r#"vendor\dll\windivert.c"#);
+        .include("vendor/include")
+        .file("vendor/dll/windivert.c");
 
     for &flag in STATIC_CL_ARGS {
         build.flag(flag);
@@ -19,7 +19,7 @@ pub fn lib() {
 }
 
 pub fn dll() {
-    let out_dir = env::var("OUT_DIR").unwrap();
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let mut compiler = Build::new().get_compiler().to_command();
 
     let arch = match env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_ref() {
@@ -34,9 +34,15 @@ pub fn dll() {
 
     compiler.arg(&format!("/MACHINE:{arch}"));
 
-    compiler.arg(&format!(r#"/PDB:{out_dir}\WinDivertDll.pdb"#));
-    compiler.arg(&format!(r#"/OUT:{out_dir}\WinDivert.dll"#));
-    compiler.arg(&format!(r#"/IMPLIB:{out_dir}\WinDivert.lib"#));
+    compiler.arg(format!(
+        "/PDB:{}",
+        out_dir.join("WinDivertDll.pdb").display()
+    ));
+    compiler.arg(format!("/OUT:{}", out_dir.join("WinDivert.dll").display()));
+    compiler.arg(format!(
+        "/IMPLIB:{}",
+        out_dir.join("WinDivert.lib").display()
+    ));
 
     if let Ok(out) = compiler.output() {
         if !out.status.success() {
@@ -51,21 +57,22 @@ pub fn dll() {
     }
 
     if let Ok(dylib_save_dir) = env::var(DLL_OUTPUT_PATH_ARG) {
+        let dylib_save_dir_path = Path::new(&dylib_save_dir);
         let _ = fs::copy(
-            format!(r#"{out_dir}\WinDivert.dll"#),
-            format!(r#"{dylib_save_dir}\WinDivert.dll"#),
+            out_dir.join("WinDivert.dll"),
+            dylib_save_dir_path.join("WinDivert.dll"),
         );
         let _ = fs::copy(
-            format!(r#"{out_dir}\WinDivert.lib"#),
-            format!(r#"{dylib_save_dir}\WinDivert.lib"#),
+            out_dir.join("WinDivert.lib"),
+            dylib_save_dir_path.join("WinDivert.lib"),
         );
     } else {
-        println!("cargo:warning=Environment variable {DLL_OUTPUT_PATH_ARG} not found, compiled dll & lib files will be stored on {out_dir}");
+        println!("cargo:warning=Environment variable {DLL_OUTPUT_PATH_ARG} not found, compiled dll & lib files will be stored on {}", out_dir.display());
     };
 }
 
 const DYNAMIC_CL_ARGS: &[&str] = &[
-    r#"/Ivendor\include"#,
+    r#"/Ivendor/include"#,
     r#"/ZI"#,
     r#"/JMC"#,
     r#"/nologo"#,
@@ -86,7 +93,7 @@ const DYNAMIC_CL_ARGS: &[&str] = &[
     r#"/TC"#,
     r#"/FC"#,
     r#"/errorReport:queue"#,
-    r#"vendor\dll\windivert.c"#,
+    r#"vendor/dll/windivert.c"#,
     r#"/link"#,
     r#"/ERRORREPORT:QUEUE"#,
     r#"/INCREMENTAL"#,
